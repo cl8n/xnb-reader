@@ -99,11 +99,16 @@ pub const Xnb = struct {
     resource: ResourceType,
 
     pub const TypeReader = struct {
-        name: []u8,
         version: i32,
+        tag: ResourceTypeTag,
     };
 
-    pub const ResourceType = union(enum) {
+    pub const ResourceTypeTag = enum {
+        effect,
+        texture_2d,
+    };
+
+    pub const ResourceType = union(ResourceTypeTag) {
         effect: Effect,
         texture_2d: Texture2D,
     };
@@ -148,28 +153,32 @@ pub const Xnb = struct {
         self.type_readers = try allocator.alloc(TypeReader, type_reader_count);
 
         for (self.type_readers) |*type_reader| {
-            type_reader.name = try readString(allocator, reader);
+            const type_reader_name = try readString(allocator, reader);
             type_reader.version = try reader.readInt(i32, .little);
 
-            blk: {
-                for (all_type_readers) |type_reader_name| {
-                    if (std.mem.eql(u8, type_reader.name, type_reader_name)) {
-                        break :blk;
+            const type_reader_names = [_][]const u8{
+                "Microsoft.Xna.Framework.Content.EffectReader",
+                "Microsoft.Xna.Framework.Content.Texture2DReader",
+            };
+
+            type_reader.tag = blk: {
+                for (type_reader_names, 0..) |name, index| {
+                    if (std.mem.eql(u8, type_reader_name, name)) {
+                        break :blk switch (index) {
+                            0 => .effect,
+                            1 => .texture_2d,
+                            else => unreachable,
+                        };
                     }
                 }
                 return XnbParseError.UnknownTypeReader;
-            }
+            };
         }
 
         if (try std.leb.readUleb128(u32, reader) != 0) {
             return XnbParseError.SharedResourcesUnsupported;
         }
     }
-
-    const all_type_readers = &[_][]const u8{
-        "Microsoft.Xna.Framework.Content.EffectReader",
-        "Microsoft.Xna.Framework.Content.Texture2DReader",
-    };
 
     fn parseResource(self: *@This(), allocator: std.mem.Allocator, reader: std.io.AnyReader) !void {
         var type_reader_index = try std.leb.readUleb128(u32, reader);
@@ -185,19 +194,10 @@ pub const Xnb = struct {
         }
 
         const type_reader = self.type_readers[type_reader_index];
-        const all_type_readers_index = blk: {
-            for (all_type_readers, 0..) |type_reader_name, index| {
-                if (std.mem.eql(u8, type_reader.name, type_reader_name)) {
-                    break :blk index;
-                }
-            }
-            unreachable;
-        };
 
-        self.resource = switch (all_type_readers_index) {
-            0 => .{ .effect = try Effect.parse(allocator, reader) },
-            1 => .{ .texture_2d = try Texture2D.parse(allocator, reader) },
-            else => unreachable,
+        self.resource = switch (type_reader.tag) {
+            .effect => .{ .effect = try Effect.parse(allocator, reader) },
+            .texture_2d => .{ .texture_2d = try Texture2D.parse(allocator, reader) },
         };
     }
 };
