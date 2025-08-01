@@ -2,7 +2,7 @@ const std = @import("std");
 
 pub const Effect = struct {
     // TODO
-    fn parse(allocator: std.mem.Allocator, reader: std.io.AnyReader) !@This() {
+    fn parse(allocator: std.mem.Allocator, reader: *std.io.Reader) !@This() {
         _ = allocator;
         _ = reader;
         return .{};
@@ -38,29 +38,26 @@ pub const Texture2D = struct {
     height: u32,
     mips: [][]u8,
 
-    fn parse(allocator: std.mem.Allocator, reader: std.io.AnyReader) !@This() {
+    fn parse(allocator: std.mem.Allocator, reader: *std.io.Reader) !@This() {
         var texture: @This() = undefined;
 
-        texture.pixel_format = reader.readEnum(PixelFormat, .little) catch |err| switch (err) {
-            // 0.15.0
-            // error.InvalidEnumTag => null,
-            error.InvalidValue => null,
+        texture.pixel_format = reader.takeEnum(PixelFormat, .little) catch |err| switch (err) {
+            error.InvalidEnumTag => null,
             else => return err,
         };
-        texture.width = try reader.readInt(u32, .little);
-        texture.height = try reader.readInt(u32, .little);
+        texture.width = try reader.takeInt(u32, .little);
+        texture.height = try reader.takeInt(u32, .little);
 
         if (texture.width == 0 or texture.height == 0) {
             return XnbParseError.InvalidTexture2DSize;
         }
 
-        const mip_count = try reader.readInt(u32, .little);
+        const mip_count = try reader.takeInt(u32, .little);
         texture.mips = try allocator.alloc([]u8, mip_count);
 
         for (texture.mips) |*mip| {
-            const size = try reader.readInt(u32, .little);
-            mip.* = try allocator.alloc(u8, size);
-            try reader.readNoEof(mip.*);
+            const size = try reader.takeInt(u32, .little);
+            mip.* = try reader.readAlloc(allocator, size);
         }
 
         return texture;
@@ -107,7 +104,7 @@ pub const Xnb = struct {
     };
 
     /// Parse an XNB file from a reader.
-    pub fn parse(allocator: std.mem.Allocator, reader: std.io.AnyReader) !@This() {
+    pub fn parse(allocator: std.mem.Allocator, reader: *std.io.Reader) !@This() {
         var xnb: @This() = undefined;
 
         try xnb.parseHeader(allocator, reader);
@@ -118,36 +115,45 @@ pub const Xnb = struct {
         return xnb;
     }
 
-    fn parseHeader(self: *@This(), allocator: std.mem.Allocator, reader: std.io.AnyReader) !void {
+    fn parseHeader(self: *@This(), allocator: std.mem.Allocator, reader: *std.io.Reader) !void {
         // Handle osu!stable special case where an empty header can indicate
         // that this XNB file contains a single Texture2D
-        // TODO: (13 zeroes followed by Texture2D)
+        if (std.mem.eql(u8, try reader.peekArray(13), &[_]u8{0} ** 13)) {
+            self.platform = .windows;
+            self.version = 1;
+            self.flags = 0;
+            self.size = 0;
 
-        if (!try reader.isBytes("XNB")) {
+            reader.toss(13);
+
+            return;
+        }
+
+        if (!std.mem.eql(u8, try reader.takeArray(3), "XNB")) {
             return XnbParseError.InvalidMagic;
         }
 
-        self.platform = switch (try reader.readByte()) {
+        self.platform = switch (try reader.takeByte()) {
             'w' => .windows,
             'm' => .windows_phone,
             'x' => .xbox_360,
             else => null,
         };
-        self.version = try reader.readByte();
-        self.flags = try reader.readByte();
+        self.version = try reader.takeByte();
+        self.flags = try reader.takeByte();
 
         if (self.flags & 0x80 != 0) {
             return XnbParseError.CompressedUnsupported;
         }
 
-        self.size = try reader.readInt(u32, .little);
+        self.size = try reader.takeInt(u32, .little);
 
-        const type_reader_count = try std.leb.readUleb128(u32, reader);
+        const type_reader_count = try reader.takeLeb128(u32);
         self.type_readers = try allocator.alloc(TypeReader, type_reader_count);
 
         for (self.type_readers) |*type_reader| {
             type_reader.name = try readString(allocator, reader);
-            type_reader.version = try reader.readInt(i32, .little);
+            type_reader.version = try reader.takeInt(i32, .little);
 
             blk: {
                 for (all_type_readers) |type_reader_name| {
@@ -159,7 +165,7 @@ pub const Xnb = struct {
             }
         }
 
-        if (try std.leb.readUleb128(u32, reader) != 0) {
+        if (try reader.takeLeb128(u32) != 0) {
             return XnbParseError.SharedResourcesUnsupported;
         }
     }
@@ -169,8 +175,8 @@ pub const Xnb = struct {
         "Microsoft.Xna.Framework.Content.Texture2DReader",
     };
 
-    fn parseResource(self: *@This(), allocator: std.mem.Allocator, reader: std.io.AnyReader) !void {
-        var type_reader_index = try std.leb.readUleb128(u32, reader);
+    fn parseResource(self: *@This(), allocator: std.mem.Allocator, reader: *std.io.Reader) !void {
+        var type_reader_index = try reader.takeLeb128(u32);
 
         if (type_reader_index == 0) {
             return;
@@ -201,9 +207,8 @@ pub const Xnb = struct {
 };
 
 /// Read a string with its length indicated by a LEB128.
-fn readString(allocator: std.mem.Allocator, reader: std.io.AnyReader) ![]u8 {
-    const length = try std.leb.readUleb128(u32, reader);
-    const buffer = try allocator.alloc(u8, length);
-    try reader.readNoEof(buffer);
-    return buffer;
+fn readString(allocator: std.mem.Allocator, reader: *std.io.Reader) ![]u8 {
+    const length = try reader.takeLeb128(u32);
+
+    return reader.readAlloc(allocator, length);
 }

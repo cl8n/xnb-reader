@@ -27,7 +27,7 @@ pub fn main() !void {
     }
 
     const in_file = if (std.mem.eql(u8, in_filename, "-"))
-        std.io.getStdIn()
+        std.fs.File.stdin()
     else
         std.fs.cwd().openFile(in_filename, .{}) catch {
             std.log.err("Failed to open {s}", .{in_filename});
@@ -36,10 +36,9 @@ pub fn main() !void {
         };
     defer in_file.close();
 
-    var buffered_reader = std.io.bufferedReader(in_file.reader());
-    const reader = buffered_reader.reader();
-
-    const xnb = Xnb.parse(allocator, reader.any()) catch |err| {
+    const read_buffer = try allocator.alloc(u8, 4096);
+    var reader = in_file.reader(read_buffer).interface;
+    const xnb = Xnb.parse(allocator, &reader) catch |err| {
         std.log.err("{s}", .{switch (err) {
             XnbParseError.CompressedUnsupported => "Compressed XNB files are not supported",
             XnbParseError.InvalidMagic => "Invalid magic bytes in XNB file",
@@ -78,14 +77,14 @@ pub fn main() !void {
             };
             defer out_file.close();
 
-            var buffered_writer = std.io.bufferedWriter(out_file.writer());
-            const writer = buffered_writer.writer();
-
+            const write_buffer = try allocator.alloc(u8, 4096);
+            var file_writer = out_file.writer(write_buffer);
+            var writer = file_writer.interface;
             writer.writeAll(texture.mips[0]) catch {
                 std.log.err("Error writing output file", .{});
                 return;
             };
-            try buffered_writer.flush();
+            try file_writer.end();
         },
     }
 }
@@ -117,24 +116,18 @@ fn printUsage(comptime following_error: bool) void {
 
 // Copied from std.log.defaultLog
 fn print(comptime format: []const u8, args: anytype) void {
-    const stderr = std.io.getStdErr().writer();
-    var bw = std.io.bufferedWriter(stderr);
-    const writer = bw.writer();
-
-    std.debug.lockStdErr();
-    defer std.debug.unlockStdErr();
-    nosuspend {
-        writer.print(format ++ "\n", args) catch return;
-        bw.flush() catch return;
-    }
+    var buffer: [64]u8 = undefined;
+    const stderr = std.debug.lockStderrWriter(&buffer);
+    defer std.debug.unlockStderrWriter();
+    nosuspend stderr.print(format ++ "\n", args) catch return;
 }
 
 fn createOutFile(allocator: std.mem.Allocator, filename: *[:0]const u8, extension: []const u8) !std.fs.File {
     if (std.mem.eql(u8, filename.*, "-")) {
-        return std.io.getStdOut();
+        return std.fs.File.stdout();
     }
 
-    filename.* = try std.fmt.allocPrintZ(allocator, "{s}.{s}", .{ filename.*, extension });
+    filename.* = try std.fmt.allocPrintSentinel(allocator, "{s}.{s}", .{ filename.*, extension }, 0);
 
     return std.fs.cwd().createFile(filename.*, .{});
 }
