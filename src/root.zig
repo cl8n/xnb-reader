@@ -173,6 +173,8 @@ pub const Xnb = struct {
                 }
                 return XnbParseError.UnknownTypeReader;
             };
+
+            // TODO validate type reader tag + version
         }
 
         if (try std.leb.readUleb128(u32, reader) != 0) {
