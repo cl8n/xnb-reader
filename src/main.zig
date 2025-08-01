@@ -63,15 +63,13 @@ pub fn main() !void {
                 return;
             }
 
-            if (texture.pixel_format != .color) {
-                std.log.err("Textures with pixel format other than RGBA are not supported yet", .{});
-                return;
-            }
+            const pixel_format_name = if (texture.pixel_format) |p| try std.ascii.allocUpperString(allocator, @tagName(p)) else "(unknown pixel format)";
+            const pixel_format_extension = if (texture.pixel_format) |p| @tagName(p) else "bin";
 
-            print("Dumping {d}x{d} RGBA texture data", .{ texture.width, texture.height });
+            print("Dumping {d}x{d} {s} texture data", .{ texture.width, texture.height, pixel_format_name });
 
             var out_filename_with_extension = out_filename;
-            const out_file = createOutFile(allocator, &out_filename_with_extension, "rgba") catch {
+            const out_file = createOutFile(allocator, &out_filename_with_extension, pixel_format_extension) catch {
                 std.log.err("Failed to open {s}", .{out_filename_with_extension});
                 printUsage(true);
                 return;
