@@ -10,7 +10,9 @@ pub const Effect = struct {
 };
 
 pub const PixelFormat = enum(u32) {
-    color,
+    // TODO: Not sure why this enum appears to be offset by 1. Find/link documentation
+    /// "Color"
+    rgba = 1,
     bgr565,
     bgra5551,
     bgra4444,
