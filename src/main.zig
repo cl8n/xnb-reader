@@ -132,7 +132,12 @@ fn createOutFile(allocator: std.mem.Allocator, filename: *[:0]const u8, extensio
         return std.io.getStdOut();
     }
 
-    filename.* = try std.fmt.allocPrintZ(allocator, "{s}.{s}", .{ filename.*, extension });
+    if (filename.len < extension.len + 1 or
+        filename.*[filename.len - extension.len - 1] != '.' or
+        !std.mem.endsWith(u8, filename.*, extension))
+    {
+        filename.* = try std.mem.joinZ(allocator, ".", &.{ filename.*, extension });
+    }
 
     return std.fs.cwd().createFile(filename.*, .{});
 }
