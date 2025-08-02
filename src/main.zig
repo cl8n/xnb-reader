@@ -124,12 +124,7 @@ fn createOutFile(allocator: std.mem.Allocator, filename: *[]const u8, extension:
         return std.io.getStdOut();
     }
 
-    if (filename.len < extension.len + 1 or
-        filename.*[filename.len - extension.len - 1] != '.' or
-        !std.mem.endsWith(u8, filename.*, extension))
-    {
-        filename.* = try std.mem.join(allocator, ".", &.{ filename.*, extension });
-    }
+    filename.* = try std.mem.join(allocator, ".", &.{ filename.*, extension });
 
     return std.fs.cwd().createFile(filename.*, .{});
 }
