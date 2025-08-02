@@ -56,22 +56,7 @@ pub fn main() !void {
         .effect => |effect| {
             print("Dumping Effect bytecode", .{});
 
-            var out_filename_with_extension = out_filename;
-            const out_file = createOutFile(allocator, &out_filename_with_extension, "fx.bin") catch {
-                std.log.err("Failed to open {s}", .{out_filename_with_extension});
-                printUsage(true);
-                return;
-            };
-            defer out_file.close();
-
-            var buffered_writer = std.io.bufferedWriter(out_file.writer());
-            const writer = buffered_writer.writer();
-
-            writer.writeAll(effect.bytecode) catch {
-                std.log.err("Error writing output file", .{});
-                return;
-            };
-            try buffered_writer.flush();
+            try dumpToFile(allocator, out_filename, "fx.bin", effect.bytecode);
         },
         .texture_2d => |texture| {
             if (texture.mips.len != 1) {
@@ -84,22 +69,7 @@ pub fn main() !void {
 
             print("Dumping {d}x{d} {s} texture data", .{ texture.width, texture.height, pixel_format_name });
 
-            var out_filename_with_extension = out_filename;
-            const out_file = createOutFile(allocator, &out_filename_with_extension, pixel_format_extension) catch {
-                std.log.err("Failed to open {s}", .{out_filename_with_extension});
-                printUsage(true);
-                return;
-            };
-            defer out_file.close();
-
-            var buffered_writer = std.io.bufferedWriter(out_file.writer());
-            const writer = buffered_writer.writer();
-
-            writer.writeAll(texture.mips[0]) catch {
-                std.log.err("Error writing output file", .{});
-                return;
-            };
-            try buffered_writer.flush();
+            try dumpToFile(allocator, out_filename, pixel_format_extension, texture.mips[0]);
         },
     }
 }
@@ -143,7 +113,7 @@ fn print(comptime format: []const u8, args: anytype) void {
     }
 }
 
-fn createOutFile(allocator: std.mem.Allocator, filename: *[:0]const u8, extension: []const u8) !std.fs.File {
+fn createOutFile(allocator: std.mem.Allocator, filename: *[]const u8, extension: []const u8) !std.fs.File {
     if (std.mem.eql(u8, filename.*, "-")) {
         return std.io.getStdOut();
     }
@@ -152,8 +122,28 @@ fn createOutFile(allocator: std.mem.Allocator, filename: *[:0]const u8, extensio
         filename.*[filename.len - extension.len - 1] != '.' or
         !std.mem.endsWith(u8, filename.*, extension))
     {
-        filename.* = try std.mem.joinZ(allocator, ".", &.{ filename.*, extension });
+        filename.* = try std.mem.join(allocator, ".", &.{ filename.*, extension });
     }
 
     return std.fs.cwd().createFile(filename.*, .{});
+}
+
+fn dumpToFile(allocator: std.mem.Allocator, filename: []const u8, extension: []const u8, data: []const u8) !void {
+    var filename_with_extension = filename;
+
+    const out_file = createOutFile(allocator, &filename_with_extension, extension) catch {
+        std.log.err("Failed to open {s}", .{filename_with_extension});
+        printUsage(true);
+        return;
+    };
+    defer out_file.close();
+
+    var buffered_writer = std.io.bufferedWriter(out_file.writer());
+    const writer = buffered_writer.writer();
+
+    writer.writeAll(data) catch {
+        std.log.err("Error writing output file", .{});
+        return;
+    };
+    try buffered_writer.flush();
 }
