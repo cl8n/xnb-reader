@@ -53,9 +53,25 @@ pub fn main() !void {
     };
 
     switch (xnb.resource) {
-        .effect => {
-            std.log.err("Effects not supported yet", .{});
-            return;
+        .effect => |effect| {
+            print("Dumping Effect bytecode", .{});
+
+            var out_filename_with_extension = out_filename;
+            const out_file = createOutFile(allocator, &out_filename_with_extension, "fx.bin") catch {
+                std.log.err("Failed to open {s}", .{out_filename_with_extension});
+                printUsage(true);
+                return;
+            };
+            defer out_file.close();
+
+            var buffered_writer = std.io.bufferedWriter(out_file.writer());
+            const writer = buffered_writer.writer();
+
+            writer.writeAll(effect.bytecode) catch {
+                std.log.err("Error writing output file", .{});
+                return;
+            };
+            try buffered_writer.flush();
         },
         .texture_2d => |texture| {
             if (texture.mips.len != 1) {

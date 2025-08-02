@@ -1,11 +1,14 @@
 const std = @import("std");
 
 pub const Effect = struct {
-    // TODO
+    bytecode: []u8,
+
     fn parse(allocator: std.mem.Allocator, reader: std.io.AnyReader) !@This() {
-        _ = allocator;
-        _ = reader;
-        return .{};
+        const size = try reader.readInt(u32, .little);
+        const bytecode = try allocator.alloc(u8, size);
+        try reader.readNoEof(bytecode);
+
+        return .{ .bytecode = bytecode };
     }
 };
 
