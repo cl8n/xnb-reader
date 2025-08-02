@@ -59,17 +59,23 @@ pub fn main() !void {
             try dumpToFile(allocator, out_filename, "fx.bin", effect.bytecode);
         },
         .texture_2d => |texture| {
-            if (texture.mips.len != 1) {
-                std.log.err("Textures with more than 1 mip not supported yet", .{});
-                return;
-            }
-
             const pixel_format_name = if (texture.pixel_format) |p| try std.ascii.allocUpperString(allocator, @tagName(p)) else "(unknown pixel format)";
             const pixel_format_extension = if (texture.pixel_format) |p| @tagName(p) else "bin";
 
             print("Dumping {d}x{d} {s} texture data", .{ texture.width, texture.height, pixel_format_name });
 
+            if (texture.mips.len == 0) {
+                print("Texture has no mips", .{});
+                return;
+            }
+
             try dumpToFile(allocator, out_filename, pixel_format_extension, texture.mips[0]);
+
+            for (texture.mips[1..], 1..) |mip, index| {
+                const filename = try std.fmt.allocPrint(allocator, "{s}-{d}", .{ out_filename, index });
+
+                try dumpToFile(allocator, filename, pixel_format_extension, mip);
+            }
         },
     }
 }
