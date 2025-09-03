@@ -17,11 +17,14 @@ pub fn main() !void {
         return;
     }
 
-    const in_file = if (std.mem.eql(u8, options.in_filename, "-"))
+    const in_filename = options.in_filename orelse "-";
+    const out_filename = options.out_filename orelse "-";
+
+    const in_file = if (std.mem.eql(u8, in_filename, "-"))
         std.fs.File.stdin()
     else
-        std.fs.cwd().openFile(options.in_filename, .{}) catch {
-            std.log.err("Failed to open {s}", .{options.in_filename});
+        std.fs.cwd().openFile(in_filename, .{}) catch {
+            std.log.err("Failed to open {s}", .{in_filename});
             printUsage(true);
             return;
         };
@@ -47,7 +50,7 @@ pub fn main() !void {
         .effect => |effect| {
             print("Dumping Effect bytecode", .{});
 
-            try dumpToFile(allocator, options.out_filename, "fx.bin", effect.bytecode);
+            try dumpToFile(allocator, out_filename, "fx.bin", effect.bytecode);
         },
         .texture_2d => |texture| {
             const pixel_format_name = if (texture.pixel_format) |p| try std.ascii.allocUpperString(allocator, @tagName(p)) else "(unknown pixel format)";
@@ -60,10 +63,10 @@ pub fn main() !void {
                 return;
             }
 
-            try dumpToFile(allocator, options.out_filename, pixel_format_extension, texture.mips[0]);
+            try dumpToFile(allocator, out_filename, pixel_format_extension, texture.mips[0]);
 
             for (texture.mips[1..], 1..) |mip, index| {
-                const filename = try std.fmt.allocPrint(allocator, "{s}-{d}", .{ options.out_filename, index });
+                const filename = try std.fmt.allocPrint(allocator, "{s}-{d}", .{ out_filename, index });
 
                 try dumpToFile(allocator, filename, pixel_format_extension, mip);
             }
@@ -73,8 +76,8 @@ pub fn main() !void {
 
 const ProgramOptions = struct {
     exit: bool = false,
-    in_filename: []const u8 = "-",
-    out_filename: []const u8 = "-",
+    in_filename: ?[]const u8 = null,
+    out_filename: ?[]const u8 = null,
     pipe_command_template: ?[][]const u8 = null,
 
     pub fn parse(allocator: std.mem.Allocator) !@This() {
