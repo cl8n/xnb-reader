@@ -2,7 +2,7 @@
     .name = .xnb_reader,
     .version = "0.2.1",
     .fingerprint = 0xa81be12b20b81d88, // Changing this has security and trust implications.
-    .minimum_zig_version = "0.14.1",
+    .minimum_zig_version = "0.15.1",
     .paths = .{
         "build.zig",
         "build.zig.zon",
