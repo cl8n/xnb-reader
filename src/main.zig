@@ -10,27 +10,18 @@ pub fn main() !void {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    var args = try std.process.argsWithAllocator(allocator);
-    defer args.deinit();
+    var options = try ProgramOptions.parse(allocator);
+    defer options.deinit(allocator);
 
-    program_name = std.fs.path.basename(args.next() orelse "");
-
-    const in_filename = args.next() orelse "-";
-    const out_filename = args.next() orelse "-";
-
-    if (std.mem.eql(u8, in_filename, "-h") or
-        std.mem.eql(u8, in_filename, "--help") or
-        std.mem.eql(u8, in_filename, "-?"))
-    {
-        printUsage(false);
+    if (options.exit) {
         return;
     }
 
-    const in_file = if (std.mem.eql(u8, in_filename, "-"))
+    const in_file = if (std.mem.eql(u8, options.in_filename, "-"))
         std.fs.File.stdin()
     else
-        std.fs.cwd().openFile(in_filename, .{}) catch {
-            std.log.err("Failed to open {s}", .{in_filename});
+        std.fs.cwd().openFile(options.in_filename, .{}) catch {
+            std.log.err("Failed to open {s}", .{options.in_filename});
             printUsage(true);
             return;
         };
@@ -56,7 +47,7 @@ pub fn main() !void {
         .effect => |effect| {
             print("Dumping Effect bytecode", .{});
 
-            try dumpToFile(allocator, out_filename, "fx.bin", effect.bytecode);
+            try dumpToFile(allocator, options.out_filename, "fx.bin", effect.bytecode);
         },
         .texture_2d => |texture| {
             const pixel_format_name = if (texture.pixel_format) |p| try std.ascii.allocUpperString(allocator, @tagName(p)) else "(unknown pixel format)";
@@ -69,16 +60,88 @@ pub fn main() !void {
                 return;
             }
 
-            try dumpToFile(allocator, out_filename, pixel_format_extension, texture.mips[0]);
+            try dumpToFile(allocator, options.out_filename, pixel_format_extension, texture.mips[0]);
 
             for (texture.mips[1..], 1..) |mip, index| {
-                const filename = try std.fmt.allocPrint(allocator, "{s}-{d}", .{ out_filename, index });
+                const filename = try std.fmt.allocPrint(allocator, "{s}-{d}", .{ options.out_filename, index });
 
                 try dumpToFile(allocator, filename, pixel_format_extension, mip);
             }
         },
     }
 }
+
+const ProgramOptions = struct {
+    exit: bool = false,
+    in_filename: []const u8 = "-",
+    out_filename: []const u8 = "-",
+    pipe_command_template: ?[][]const u8 = null,
+
+    pub fn parse(allocator: std.mem.Allocator) !@This() {
+        var args = try std.process.argsWithAllocator(allocator);
+        defer args.deinit();
+
+        program_name = std.fs.path.basename(args.next() orelse "");
+
+        var options = @This(){};
+        var positional_argument_index: u32 = 0;
+        var skip_non_positional = false;
+
+        while (args.next()) |arg| {
+            if (!skip_non_positional) {
+                if (std.mem.eql(u8, arg, "--")) {
+                    skip_non_positional = true;
+                    continue;
+                }
+
+                if (std.mem.eql(u8, arg, "-h") or
+                    std.mem.eql(u8, arg, "--help") or
+                    std.mem.eql(u8, arg, "-?"))
+                {
+                    printUsage(false);
+                    options.exit = true;
+                    break;
+                }
+
+                if (std.mem.eql(u8, arg, "--pipe")) {
+                    var remaining_args = std.ArrayList([]const u8){};
+
+                    while (args.next()) |remaining_arg| {
+                        try remaining_args.append(allocator, remaining_arg);
+                    }
+
+                    if (remaining_args.items.len < 1) {
+                        std.log.err("Missing pipe program", .{});
+                        printUsage(true);
+                        options.exit = true;
+                        break;
+                    }
+
+                    options.pipe_command_template = try remaining_args.toOwnedSlice(allocator);
+                    break;
+                }
+            }
+
+            switch (positional_argument_index) {
+                0 => options.in_filename = arg,
+                1 => options.out_filename = arg,
+                else => {}, // TODO print usage?
+            }
+
+            positional_argument_index += 1;
+        }
+
+        return options;
+    }
+
+    pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+        if (self.pipe_command_template) |slice| {
+            allocator.free(slice);
+        }
+
+        self.* = undefined;
+    }
+};
 
 fn printUsage(comptime following_error: bool) void {
     const reset = "\x1b[0m";
@@ -88,15 +151,31 @@ fn printUsage(comptime following_error: bool) void {
     print(if (following_error)
         \\
         \\Usage: {s}{s}{s} [{s}XNB file{s}] [{s}output file{s}]
+        \\       {s}{s}{s} [{s}XNB file{s}] --pipe {s}program{s} [{s}argument templates{s}...]
     else
         \\Read content from an XNB file into an output file (extension will be added automatically):
         \\
         \\    {s}{s}{s} [{s}XNB file{s}] [{s}output file{s}]
         \\
+        \\Read content from an XNB file and pipe the result to a program with templated arguments. Currently only supports Texture2D files with 1 mip and RGBA pixel format.
+        \\
+        \\Supported templates: {{x}}, {{y}}, {{depth}}
+        \\
+        \\    {s}{s}{s} [{s}XNB file{s}] --pipe {s}program{s} [{s}argument templates{s}...]
+        \\
         \\Omitting or writing "-" as either of the filenames will read from stdin or write to stdout respectively.
     , .{
         bold,
         program_name,
+        reset,
+        underline,
+        reset,
+        underline,
+        reset,
+        bold,
+        program_name,
+        reset,
+        underline,
         reset,
         underline,
         reset,
