@@ -127,7 +127,7 @@ pub const Xnb = struct {
     fn parseHeader(self: *@This(), allocator: std.mem.Allocator, reader: *std.io.Reader) !void {
         // Handle osu!stable special case where an empty header can indicate
         // that this XNB file contains a single Texture2D
-        if (std.mem.eql(u8, try reader.peekArray(13), &[_]u8{0} ** 13)) {
+        if (std.mem.eql(u8, try reader.peek(13), &[_]u8{0} ** 13)) {
             self.platform = .windows;
             self.version = 1;
             self.flags = 0;
@@ -138,7 +138,7 @@ pub const Xnb = struct {
             return;
         }
 
-        if (!std.mem.eql(u8, try reader.takeArray(3), "XNB")) {
+        if (!std.mem.eql(u8, try reader.take(3), "XNB")) {
             return XnbParseError.InvalidMagic;
         }
 
