@@ -134,6 +134,12 @@ const ProgramOptions = struct {
             positional_argument_index += 1;
         }
 
+        if (options.out_filename != null and options.pipe_command_template != null) {
+            std.log.err("Cannot specify both output file and pipe program", .{});
+            printUsage(true);
+            options.exit = true;
+        }
+
         return options;
     }
 
