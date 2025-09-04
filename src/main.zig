@@ -87,16 +87,12 @@ pub fn main() !void {
                 var stdin_writer = child_process.stdin.?.writer(&stdin_writer_buffer);
                 const writer = &stdin_writer.interface;
 
-                writer.writeAll(texture.mips[0]) catch {
-                    std.log.err("Failed to write to pipe for child process", .{});
-                    _ = try child_process.kill();
-                    return;
-                };
-                try writer.flush();
+                writer.writeAll(texture.mips[0]) catch {};
+                writer.flush() catch {};
 
                 switch (try child_process.wait()) {
                     .Exited => |status| std.process.exit(status),
-                    else => _ = try child_process.kill(),
+                    else => _ = child_process.kill() catch {},
                 }
 
                 return;
