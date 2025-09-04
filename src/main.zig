@@ -63,6 +63,45 @@ pub fn main() !void {
                 return;
             }
 
+            if (options.pipe_command_template != null and
+                texture.mips.len == 1 and
+                texture.pixel_format == .rgba)
+            {
+                const child_process_args = try getChildProcessArgs(allocator, options.pipe_command_template.?, .{
+                    .w = texture.width,
+                    .h = texture.height,
+                    .depth = if (texture.pixel_format == .rgba) 8 else unreachable,
+                });
+                defer {
+                    for (child_process_args) |arg| allocator.free(arg);
+                    allocator.free(child_process_args);
+                }
+
+                var child_process = std.process.Child.init(child_process_args, allocator);
+                child_process.stdin_behavior = .Pipe;
+
+                try child_process.spawn();
+                errdefer _ = child_process.kill() catch {};
+
+                var stdin_writer_buffer: [1024]u8 = undefined;
+                var stdin_writer = child_process.stdin.?.writer(&stdin_writer_buffer);
+                const writer = &stdin_writer.interface;
+
+                writer.writeAll(texture.mips[0]) catch {
+                    std.log.err("Failed to write to pipe for child process", .{});
+                    _ = try child_process.kill();
+                    return;
+                };
+                try writer.flush();
+
+                switch (try child_process.wait()) {
+                    .Exited => |status| std.process.exit(status),
+                    else => _ = try child_process.kill(),
+                }
+
+                return;
+            }
+
             try dumpToFile(allocator, out_filename, pixel_format_extension, texture.mips[0]);
 
             for (texture.mips[1..], 1..) |mip, index| {
