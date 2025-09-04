@@ -78,7 +78,7 @@ const ProgramOptions = struct {
     exit: bool = false,
     in_filename: ?[]const u8 = null,
     out_filename: ?[]const u8 = null,
-    pipe_command_template: ?[][]const u8 = null,
+    pipe_command_template: ?[]const []const u8 = null,
 
     pub fn parse(allocator: std.mem.Allocator) !@This() {
         var args = try std.process.argsWithAllocator(allocator);
@@ -168,7 +168,7 @@ fn printUsage(comptime following_error: bool) void {
         \\
         \\Read content from an XNB file and pipe the result to a program with templated arguments. Currently only supports Texture2D files with 1 mip and RGBA pixel format.
         \\
-        \\Supported templates: {{x}}, {{y}}, {{depth}}
+        \\Supported templates: {{w}}, {{h}}, {{depth}}
         \\
         \\    {s}{s}{s} [{s}XNB file{s}] --pipe {s}program{s} [{s}argument templates{s}...]
         \\
@@ -230,4 +230,69 @@ fn dumpToFile(allocator: std.mem.Allocator, filename: []const u8, extension: []c
         return;
     };
     try writer.flush();
+}
+
+fn getChildProcessArgs(allocator: std.mem.Allocator, argv: []const []const u8, template_values: anytype) ![]const []const u8 {
+    const template_values_field_names = comptime blk: {
+        const type_info = @typeInfo(@TypeOf(template_values));
+        const fields = type_info.@"struct".fields;
+        var field_names: [fields.len][]const u8 = undefined;
+
+        for (fields, &field_names) |field, *name| {
+            name.* = field.name;
+        }
+
+        break :blk &field_names;
+    };
+
+    const rendered_argv = try allocator.alloc([]u8, argv.len);
+
+    for (argv, rendered_argv) |arg, *rendered_arg| {
+        var rendered_arg_writer = try std.io.Writer.Allocating.initCapacity(allocator, arg.len);
+        defer rendered_arg_writer.deinit();
+        const writer = &rendered_arg_writer.writer;
+
+        var pos: usize = 0;
+
+        while (pos < arg.len) {
+            const open_pos = std.mem.indexOfScalarPos(u8, arg, pos, '{') orelse break;
+            try writer.writeAll(arg[pos..open_pos]);
+            pos = open_pos + 1;
+
+            while (pos < arg.len and std.ascii.isLower(arg[pos])) {
+                pos += 1;
+            }
+
+            if (pos < arg.len and arg[pos] == '}') {
+                const token = arg[open_pos + 1 .. pos];
+
+                inline for (template_values_field_names) |field_name| {
+                    if (std.mem.eql(u8, field_name, token)) {
+                        const fmt = comptime blk: {
+                            if (std.mem.eql(u8, field_name, "w")) break :blk "{d}";
+                            if (std.mem.eql(u8, field_name, "h")) break :blk "{d}";
+                            if (std.mem.eql(u8, field_name, "depth")) break :blk "{d}";
+                            unreachable;
+                        };
+
+                        try writer.print(fmt, .{@field(template_values, field_name)});
+                        pos += 1;
+                        break;
+                    }
+                } else {
+                    try writer.writeAll(arg[open_pos..pos]);
+                }
+            } else {
+                try writer.writeAll(arg[open_pos..pos]);
+            }
+        }
+
+        if (pos < arg.len) {
+            try writer.writeAll(arg[pos..]);
+        }
+
+        rendered_arg.* = try rendered_arg_writer.toOwnedSlice();
+    }
+
+    return rendered_argv;
 }
