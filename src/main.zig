@@ -68,8 +68,8 @@ pub fn main() !void {
                 texture.pixel_format == .rgba)
             {
                 const child_process_args = try getChildProcessArgs(allocator, options.pipe_command_template.?, .{
-                    .w = texture.width,
-                    .h = texture.height,
+                    .width = texture.width,
+                    .height = texture.height,
                     .depth = if (texture.pixel_format == .rgba) 8 else unreachable,
                 });
                 defer {
@@ -304,8 +304,8 @@ fn getChildProcessArgs(allocator: std.mem.Allocator, argv: []const []const u8, t
                 inline for (template_values_field_names) |field_name| {
                     if (std.mem.eql(u8, field_name, token)) {
                         const fmt = comptime blk: {
-                            if (std.mem.eql(u8, field_name, "w")) break :blk "{d}";
-                            if (std.mem.eql(u8, field_name, "h")) break :blk "{d}";
+                            if (std.mem.eql(u8, field_name, "width")) break :blk "{d}";
+                            if (std.mem.eql(u8, field_name, "height")) break :blk "{d}";
                             if (std.mem.eql(u8, field_name, "depth")) break :blk "{d}";
                             unreachable;
                         };
