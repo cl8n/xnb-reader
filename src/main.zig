@@ -201,13 +201,14 @@ fn printUsage(comptime following_error: bool) void {
         \\
         \\    {s}{s}{s} [{s}XNB file{s}] [{s}output file{s}]
         \\
-        \\Read content from an XNB file and pipe the result to a program with templated arguments. Currently only supports Texture2D files with 1 mip and RGBA pixel format.
+        \\Omitting or writing "-" as either of the filenames will read from stdin or write to stdout respectively.
         \\
-        \\Supported templates: {{w}}, {{h}}, {{depth}}
+        \\
+        \\Read content from an XNB file and pipe the result to a program with templated arguments. Currently only supports Texture2D files with 1 mip and RGBA pixel format.
         \\
         \\    {s}{s}{s} [{s}XNB file{s}] --pipe {s}program{s} [{s}argument templates{s}...]
         \\
-        \\Omitting or writing "-" as either of the filenames will read from stdin or write to stdout respectively.
+        \\The supported templates are {{width}}, {{height}}, and {{depth}}.
     , .{
         bold,
         program_name,
