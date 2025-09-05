@@ -23,3 +23,14 @@ xnb-read [<XNB file>] --pipe <program> [<argument templates>...]
 ```
 
 The supported templates are `{width}`, `{height}`, and `{depth}`.
+
+### Options
+
+- `--pipe`\
+  Explained above.
+
+- `--`\
+  Interpret the rest of arguments as positional arguments.
+
+- `-h`, `-?`, `--help`\
+  Print this help page.

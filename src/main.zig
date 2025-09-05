@@ -227,6 +227,25 @@ fn printUsage(comptime following_error: bool) void {
         underline,
         reset,
     });
+
+    if (!following_error) {
+        print(
+            \\
+            \\
+            \\Options:
+            \\
+            \\    {s}--pipe{s}
+            \\    Explained above.
+            \\
+            \\    {s}--{s}
+            \\    Interpret the rest of arguments as positional arguments.
+            \\
+            \\    {s}-h{s}, {s}-?{s}, {s}--help{s}
+            \\    Print this help page.
+        ,
+            .{ bold, reset } ** 5,
+        );
+    }
 }
 
 // Copied from std.log.defaultLog
