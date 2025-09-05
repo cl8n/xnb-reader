@@ -95,9 +95,10 @@ pub fn main() !void {
                 var stdin_writer_buffer: [1024]u8 = undefined;
                 var stdin_writer = child_process.stdin.?.writer(&stdin_writer_buffer);
                 const writer = &stdin_writer.interface;
-
                 writer.writeAll(mips[0]) catch {};
                 writer.flush() catch {};
+                child_process.stdin.?.close();
+                child_process.stdin = null;
 
                 switch (try child_process.wait()) {
                     .Exited => |status| std.process.exit(status),
