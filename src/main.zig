@@ -98,6 +98,12 @@ pub fn main() !void {
                 return;
             }
 
+            if (std.mem.eql(u8, out_filename, "-") and texture.mips.len > 1) {
+                std.log.err("Cannot dump multiple ({d}) mips without a filename to extend", .{texture.mips.len});
+                printUsage(true);
+                return;
+            }
+
             try dumpToFile(allocator, out_filename, pixel_format_extension, texture.mips[0]);
 
             for (texture.mips[1..], 1..) |mip, index| {
