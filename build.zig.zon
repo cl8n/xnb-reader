@@ -1,6 +1,6 @@
 .{
     .name = .xnb_reader,
-    .version = "0.3.0",
+    .version = "0.4.0",
     .fingerprint = 0xa81be12b20b81d88, // Changing this has security and trust implications.
     .minimum_zig_version = "0.15.1",
     .paths = .{
