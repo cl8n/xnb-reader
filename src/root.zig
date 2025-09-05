@@ -127,13 +127,15 @@ pub const Xnb = struct {
     fn parseHeader(self: *@This(), allocator: std.mem.Allocator, reader: *std.io.Reader) !void {
         // Handle osu!stable special case where an empty header can indicate
         // that this XNB file contains a single Texture2D
-        if (std.mem.eql(u8, try reader.peek(13), &[_]u8{0} ** 13)) {
+        if (std.mem.eql(u8, try reader.peek(12), &[_]u8{0} ** 12)) {
+            reader.toss(12);
+
             self.platform = .windows;
             self.version = 1;
             self.flags = 0;
             self.size = 0;
-
-            reader.toss(13);
+            self.type_readers = try allocator.alloc(TypeReader, 1);
+            self.type_readers[0] = .{ .version = 1, .tag = .texture_2d };
 
             return;
         }
@@ -194,7 +196,12 @@ pub const Xnb = struct {
         var type_reader_index = try reader.takeLeb128(u32);
 
         if (type_reader_index == 0) {
-            return;
+            // Special case for header filled with zeroes
+            if (self.size == 0) {
+                type_reader_index = 1;
+            } else {
+                return;
+            }
         }
 
         type_reader_index -= 1;
