@@ -80,7 +80,6 @@ pub fn main() !void {
                 const child_process_args = try getChildProcessArgs(allocator, options.pipe_command_template.?, .{
                     .width = texture.width,
                     .height = texture.height,
-                    .depth = if (texture.pixel_format == .rgba) 8 else unreachable,
                 });
                 defer {
                     for (child_process_args) |arg| allocator.free(arg);
@@ -230,7 +229,7 @@ fn printUsage(comptime following_error: bool) void {
         \\
         \\    {s}{s}{s} [{s}XNB file{s}] --pipe {s}program{s} [{s}argument templates{s}...]
         \\
-        \\The supported templates are {{width}}, {{height}}, and {{depth}}.
+        \\The supported templates are {{width}} and {{height}}.
     , .{
         bold,
         program_name,
@@ -354,7 +353,6 @@ fn getChildProcessArgs(allocator: std.mem.Allocator, argv: []const []const u8, t
                         const fmt = comptime blk: {
                             if (std.mem.eql(u8, field_name, "width")) break :blk "{d}";
                             if (std.mem.eql(u8, field_name, "height")) break :blk "{d}";
-                            if (std.mem.eql(u8, field_name, "depth")) break :blk "{d}";
                             unreachable;
                         };
 

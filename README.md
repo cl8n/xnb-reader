@@ -22,7 +22,7 @@ Read content from an XNB file and pipe the result to a program with templated ar
 xnb-read [<XNB file>] --pipe <program> [<argument templates>...]
 ```
 
-The supported templates are `{width}`, `{height}`, and `{depth}`.
+The supported templates are `{width}` and `{height}`.
 
 ### Options
 
