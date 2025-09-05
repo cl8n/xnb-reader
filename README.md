@@ -26,7 +26,10 @@ The supported templates are `{width}`, `{height}`, and `{depth}`.
 
 ### Options
 
-- `--pipe`\
+- `--first-mip`\
+  Ignore any mips beyond the first full-sized one. Asserts that the resource is a `Texture2D`.
+
+- `--pipe <program> [<argument templates>...]`\
   Explained above.
 
 - `--`\

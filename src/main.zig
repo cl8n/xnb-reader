@@ -46,6 +46,11 @@ pub fn main() !void {
         return;
     };
 
+    if (options.first_mip and xnb.resource != .texture_2d) {
+        std.log.err("Resource is not Texture2D (required for --first-mip)", .{});
+        return;
+    }
+
     switch (xnb.resource) {
         .effect => |effect| {
             print("Dumping Effect bytecode", .{});
@@ -63,8 +68,13 @@ pub fn main() !void {
                 return;
             }
 
+            const mips = if (options.first_mip)
+                texture.mips[0..1]
+            else
+                texture.mips;
+
             if (options.pipe_command_template != null and
-                texture.mips.len == 1 and
+                mips.len == 1 and
                 texture.pixel_format == .rgba)
             {
                 const child_process_args = try getChildProcessArgs(allocator, options.pipe_command_template.?, .{
@@ -87,7 +97,7 @@ pub fn main() !void {
                 var stdin_writer = child_process.stdin.?.writer(&stdin_writer_buffer);
                 const writer = &stdin_writer.interface;
 
-                writer.writeAll(texture.mips[0]) catch {};
+                writer.writeAll(mips[0]) catch {};
                 writer.flush() catch {};
 
                 switch (try child_process.wait()) {
@@ -98,15 +108,15 @@ pub fn main() !void {
                 return;
             }
 
-            if (std.mem.eql(u8, out_filename, "-") and texture.mips.len > 1) {
-                std.log.err("Cannot dump multiple ({d}) mips without a filename to extend", .{texture.mips.len});
+            if (std.mem.eql(u8, out_filename, "-") and mips.len > 1) {
+                std.log.err("Cannot dump multiple ({d}) mips without a filename to extend", .{mips.len});
                 printUsage(true);
                 return;
             }
 
-            try dumpToFile(allocator, out_filename, pixel_format_extension, texture.mips[0]);
+            try dumpToFile(allocator, out_filename, pixel_format_extension, mips[0]);
 
-            for (texture.mips[1..], 1..) |mip, index| {
+            for (mips[1..], 1..) |mip, index| {
                 const filename = try std.fmt.allocPrint(allocator, "{s}-{d}", .{ out_filename, index });
 
                 try dumpToFile(allocator, filename, pixel_format_extension, mip);
@@ -120,6 +130,7 @@ const ProgramOptions = struct {
     in_filename: ?[]const u8 = null,
     out_filename: ?[]const u8 = null,
     pipe_command_template: ?[]const []const u8 = null,
+    first_mip: bool = false,
 
     pub fn parse(allocator: std.mem.Allocator) !@This() {
         var args = try std.process.argsWithAllocator(allocator);
@@ -139,12 +150,17 @@ const ProgramOptions = struct {
                 }
 
                 if (std.mem.eql(u8, arg, "-h") or
-                    std.mem.eql(u8, arg, "--help") or
-                    std.mem.eql(u8, arg, "-?"))
+                    std.mem.eql(u8, arg, "-?") or
+                    std.mem.eql(u8, arg, "--help"))
                 {
                     printUsage(false);
                     options.exit = true;
                     break;
+                }
+
+                if (std.mem.eql(u8, arg, "--first-mip")) {
+                    options.first_mip = true;
+                    continue;
                 }
 
                 if (std.mem.eql(u8, arg, "--pipe")) {
@@ -240,7 +256,10 @@ fn printUsage(comptime following_error: bool) void {
             \\
             \\Options:
             \\
-            \\    {s}--pipe{s}
+            \\    {s}--first-mip{s}
+            \\    Ignore any mips beyond the first full-sized one. Asserts that the resource is a Texture2D.
+            \\
+            \\    {s}--pipe{s} {s}program{s} [{s}argument templates{s}...]
             \\    Explained above.
             \\
             \\    {s}--{s}
@@ -249,7 +268,10 @@ fn printUsage(comptime following_error: bool) void {
             \\    {s}-h{s}, {s}-?{s}, {s}--help{s}
             \\    Print this help page.
         ,
-            .{ bold, reset } ** 5,
+            .{ bold, reset } ++
+                .{ bold, reset, underline, reset, underline, reset } ++
+                .{ bold, reset } ++
+                .{ bold, reset } ** 3,
         );
     }
 }
